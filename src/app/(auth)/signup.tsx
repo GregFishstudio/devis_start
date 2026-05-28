@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { ACCENT, ERROR, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function SignupScreen() {
@@ -56,18 +56,18 @@ export default function SignupScreen() {
         <View style={styles.form}>
           {!!error && (
             <ThemedView type="backgroundElement" style={styles.errorBox}>
-              <ThemedText type="small" style={styles.errorText}>{error}</ThemedText>
+              <ThemedText type="small" style={{ color: ERROR }}>{error}</ThemedText>
             </ThemedView>
           )}
 
-          {[
+          {([
             { value: fullName, setter: setFullName, placeholder: 'Nom complet', cap: 'words' as const },
             { value: email, setter: setEmail, placeholder: 'Email', cap: 'none' as const, kb: 'email-address' as const },
             { value: password, setter: setPassword, placeholder: 'Mot de passe (8 min.)', cap: 'none' as const, secure: true },
-          ].map(({ value, setter, placeholder, cap, kb, secure }) => (
+          ]).map(({ value, setter, placeholder, cap, kb, secure }) => (
             <TextInput
               key={placeholder}
-              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected }]}
               value={value}
               onChangeText={setter}
               placeholder={placeholder}
@@ -84,7 +84,7 @@ export default function SignupScreen() {
             onPress={handleSignup}
             disabled={loading}>
             {loading
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color="#0D2A45" />
               : <ThemedText style={styles.buttonText}>Créer mon compte</ThemedText>}
           </Pressable>
 
@@ -104,20 +104,20 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.two },
   form: { gap: Spacing.three },
   errorBox: { padding: Spacing.three, borderRadius: Spacing.two },
-  errorText: { color: '#EF4444' },
   input: {
     height: 52,
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
     fontSize: 16,
+    borderWidth: 1,
   },
   button: {
     height: 52,
     borderRadius: Spacing.three,
-    backgroundColor: '#208AEF',
+    backgroundColor: ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonText: { color: '#F4F1EA', fontSize: 16, fontWeight: '600' },
   link: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
 });

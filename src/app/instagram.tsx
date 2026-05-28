@@ -14,25 +14,27 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { ACCENT, BottomTabInset, ERROR, SUCCESS, WARNING, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import type { InstagramPost, InstagramPostStatus } from '@/types/database';
 
 const STATUS_LABELS: Record<InstagramPostStatus, string> = {
-  pending: 'En attente',
+  pending:    'En attente',
   processing: 'En cours',
-  posted: 'Publié',
-  failed: 'Échec',
+  posted:     'Publié',
+  failed:     'Échec',
 };
 
 const STATUS_COLORS: Record<InstagramPostStatus, string> = {
-  pending: '#F59E0B',
-  processing: '#208AEF',
-  posted: '#22C55E',
-  failed: '#EF4444',
+  pending:    WARNING,
+  processing: '#60A5FA',
+  posted:     SUCCESS,
+  failed:     ERROR,
 };
+
+const INSTAGRAM_PINK = '#E1306C';
 
 function useInstagramPosts() {
   const { profile } = useAuth();
@@ -69,27 +71,26 @@ function useInstagramPosts() {
 }
 
 function PostCard({ post }: { post: InstagramPost }) {
+  const color = STATUS_COLORS[post.status];
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
       <View style={styles.cardRow}>
         {post.media_url ? (
           <Image source={{ uri: post.media_url }} style={styles.thumb} />
         ) : (
-          <View style={styles.thumbPlaceholder}>
-            <ThemedText style={styles.thumbIcon}>📷</ThemedText>
+          <View style={[styles.thumb, styles.thumbPlaceholder]}>
+            <ThemedText style={styles.thumbIcon}>🖼</ThemedText>
           </View>
         )}
         <View style={styles.cardContent}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[post.status] }]} />
-          <ThemedText type="small" style={{ color: STATUS_COLORS[post.status] }}>
-            {STATUS_LABELS[post.status]}
-          </ThemedText>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, { backgroundColor: color }]} />
+            <ThemedText type="small" style={{ color }}>{STATUS_LABELS[post.status]}</ThemedText>
+          </View>
           {!!post.context && (
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2} style={styles.cardContext}>
-              {post.context}
-            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>{post.context}</ThemedText>
           )}
-          <ThemedText type="small" themeColor="textSecondary" style={styles.cardDate}>
+          <ThemedText type="small" themeColor="textSecondary">
             {new Date(post.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </ThemedText>
         </View>
@@ -108,13 +109,11 @@ export default function InstagramScreen() {
   const pickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       allowsEditing: true,
       quality: 0.9,
     });
-
     if (!result.canceled && result.assets[0]) {
       setMediaUri(result.assets[0].uri);
     }
@@ -125,10 +124,10 @@ export default function InstagramScreen() {
     setSubmitting(true);
     try {
       await createPost.mutateAsync({
-        media_url: mediaUri,
+        media_url:  mediaUri,
         media_type: 'image',
-        context: context.trim() || null,
-        caption: null,
+        context:    context.trim() || null,
+        caption:    null,
       });
       setMediaUri(null);
       setContext('');
@@ -137,21 +136,26 @@ export default function InstagramScreen() {
     }
   };
 
+  const canSubmit = !submitting && (!!context.trim() || !!mediaUri);
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top']}>
         <View style={styles.header}>
-          <ThemedText type="subtitle">Instagram</ThemedText>
+          <View>
+            <ThemedText type="subtitle">Instagram</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">Piloté par l'agent IA</ThemedText>
+          </View>
         </View>
 
         <ThemedView type="backgroundElement" style={styles.composer}>
-          <Pressable style={styles.mediaPicker} onPress={pickMedia}>
+          <Pressable onPress={pickMedia} style={styles.mediaPicker}>
             {mediaUri ? (
               <Image source={{ uri: mediaUri }} style={styles.mediaPreview} />
             ) : (
               <View style={styles.mediaPlaceholder}>
                 <ThemedText style={styles.mediaIcon}>📸</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">Ajouter un média</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">Sélectionner un média</ThemedText>
               </View>
             )}
           </Pressable>
@@ -168,33 +172,31 @@ export default function InstagramScreen() {
           />
 
           <Pressable
-            style={[styles.submitBtn, { opacity: submitting || (!context.trim() && !mediaUri) ? 0.5 : 1 }]}
+            style={[styles.submitBtn, { opacity: canSubmit ? 1 : 0.5 }]}
             onPress={handleSubmit}
-            disabled={submitting || (!context.trim() && !mediaUri)}>
+            disabled={!canSubmit}>
             {submitting
               ? <ActivityIndicator color="#fff" size="small" />
-              : <ThemedText style={styles.submitBtnText}>Envoyer à l'agent</ThemedText>}
+              : <ThemedText style={styles.submitBtnText}>Envoyer à l'agent ✦</ThemedText>}
           </Pressable>
         </ThemedView>
       </SafeAreaView>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator /></View>
+        <View style={styles.center}><ActivityIndicator color={ACCENT} /></View>
       ) : (
         <FlatList
           data={posts}
           keyExtractor={(p) => p.id}
           contentContainerStyle={styles.list}
+          ListHeaderComponent={posts.length > 0
+            ? <ThemedText type="small" themeColor="textSecondary" style={styles.sectionTitle}>Publications</ThemedText>
+            : null}
           renderItem={({ item }) => <PostCard post={item} />}
-          ListHeaderComponent={
-            posts.length > 0
-              ? <ThemedText type="small" themeColor="textSecondary" style={styles.sectionTitle}>Publications</ThemedText>
-              : null
-          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-                Aucune publication.\nAjoutez un média et un contexte ci-dessus.
+                Aucune publication.{'\n'}Ajoutez un média et un contexte.
               </ThemedText>
             </View>
           }
@@ -206,9 +208,16 @@ export default function InstagramScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
   composer: {
     margin: Spacing.three,
+    marginTop: 0,
     padding: Spacing.three,
     borderRadius: Spacing.three,
     gap: Spacing.three,
@@ -217,8 +226,8 @@ const styles = StyleSheet.create({
   mediaPlaceholder: {
     height: 120,
     borderRadius: Spacing.two,
-    borderWidth: 2,
-    borderColor: 'rgba(128,128,128,0.2)',
+    borderWidth: 1,
+    borderColor: '#234d73',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -230,7 +239,7 @@ const styles = StyleSheet.create({
   submitBtn: {
     height: 44,
     borderRadius: Spacing.two,
-    backgroundColor: '#E1306C',
+    backgroundColor: INSTAGRAM_PINK,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -241,12 +250,11 @@ const styles = StyleSheet.create({
   card: { padding: Spacing.three, borderRadius: Spacing.three },
   cardRow: { flexDirection: 'row', gap: Spacing.three },
   thumb: { width: 60, height: 60, borderRadius: Spacing.two },
-  thumbPlaceholder: { width: 60, height: 60, borderRadius: Spacing.two, backgroundColor: 'rgba(128,128,128,0.1)', alignItems: 'center', justifyContent: 'center' },
+  thumbPlaceholder: { backgroundColor: '#234d73', alignItems: 'center', justifyContent: 'center' },
   thumbIcon: { fontSize: 22 },
-  cardContent: { flex: 1, gap: 4 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, position: 'absolute', right: 0, top: 4 },
-  cardContext: { lineHeight: 18 },
-  cardDate: { marginTop: 2 },
+  cardContent: { flex: 1, gap: Spacing.one },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
   empty: { paddingTop: Spacing.four, alignItems: 'center' },
   emptyText: { textAlign: 'center', lineHeight: 24 },
 });

@@ -2,20 +2,21 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { generateId } from '@/lib/generate-id';
 import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { ACCENT, ERROR, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 
 const FIELDS = [
-  { key: 'name', label: 'Nom de l\'entreprise *', cap: 'words' as const },
-  { key: 'email', label: 'Email professionnel', kb: 'email-address' as const, cap: 'none' as const },
-  { key: 'phone', label: 'Téléphone', kb: 'phone-pad' as const, cap: 'none' as const },
-  { key: 'address', label: 'Adresse', cap: 'sentences' as const },
-  { key: 'siret', label: 'SIRET', kb: 'numeric' as const, cap: 'none' as const },
-  { key: 'tva_number', label: 'Numéro TVA', cap: 'characters' as const },
+  { key: 'name',       label: 'Nom de l\'entreprise *', cap: 'words'      as const },
+  { key: 'email',      label: 'Email professionnel',    kb: 'email-address' as const, cap: 'none' as const },
+  { key: 'phone',      label: 'Téléphone',              kb: 'phone-pad'    as const, cap: 'none' as const },
+  { key: 'address',    label: 'Adresse',                cap: 'sentences'   as const },
+  { key: 'siret',      label: 'SIRET',                  kb: 'numeric'      as const, cap: 'none' as const },
+  { key: 'tva_number', label: 'Numéro TVA',             cap: 'characters'  as const },
 ] as const;
 
 type FormKey = (typeof FIELDS)[number]['key'];
@@ -32,36 +33,35 @@ export default function CompanySetupScreen() {
   const update = (key: FormKey) => (value: string) => setForm(f => ({ ...f, [key]: value }));
 
   const handleCreate = async () => {
-    if (!form.name.trim()) {
-      setError('Le nom de l\'entreprise est requis');
-      return;
-    }
+    if (!form.name.trim()) { setError('Le nom de l\'entreprise est requis'); return; }
     if (!session?.user.id) return;
     setError('');
     setLoading(true);
     try {
-      const { data: company, error: companyError } = await supabase
+      // Generate UUID client-side to avoid INSERT...RETURNING triggering the SELECT policy
+      // (SELECT policy uses get_user_company_id() which returns null before profile is linked)
+      const companyId = generateId();
+
+      const { error: companyError } = await supabase
         .from('companies')
         .insert({
-          name: form.name.trim(),
-          email: form.email.trim() || null,
-          phone: form.phone.trim() || null,
-          address: form.address.trim() || null,
-          siret: form.siret.trim() || null,
+          id:         companyId,
+          name:       form.name.trim(),
+          email:      form.email.trim()      || null,
+          phone:      form.phone.trim()      || null,
+          address:    form.address.trim()    || null,
+          siret:      form.siret.trim()      || null,
           tva_number: form.tva_number.trim() || null,
-        })
-        .select()
-        .single();
+        });
 
       if (companyError) throw companyError;
 
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ company_id: company.id })
+        .update({ company_id: companyId })
         .eq('id', session.user.id);
 
       if (profileError) throw profileError;
-
       await refreshProfile();
     } catch (err: any) {
       setError(err.message ?? 'Une erreur est survenue');
@@ -84,7 +84,7 @@ export default function CompanySetupScreen() {
           <View style={styles.form}>
             {!!error && (
               <ThemedView type="backgroundElement" style={styles.errorBox}>
-                <ThemedText type="small" style={styles.errorText}>{error}</ThemedText>
+                <ThemedText type="small" style={{ color: ERROR }}>{error}</ThemedText>
               </ThemedView>
             )}
 
@@ -92,7 +92,7 @@ export default function CompanySetupScreen() {
               <View key={key} style={styles.field}>
                 <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
                 <TextInput
-                  style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+                  style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected }]}
                   value={form[key]}
                   onChangeText={update(key)}
                   placeholder={label.replace(' *', '')}
@@ -109,7 +109,7 @@ export default function CompanySetupScreen() {
               onPress={handleCreate}
               disabled={loading}>
               {loading
-                ? <ActivityIndicator color="#fff" />
+                ? <ActivityIndicator color="#0D2A45" />
                 : <ThemedText style={styles.buttonText}>Créer mon espace</ThemedText>}
             </Pressable>
           </View>
@@ -121,26 +121,26 @@ export default function CompanySetupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  safe: { flex: 1, paddingHorizontal: Spacing.four },
+  safe:   { flex: 1, paddingHorizontal: Spacing.four },
   scroll: { paddingBottom: Spacing.six },
   header: { paddingTop: Spacing.five, paddingBottom: Spacing.four, gap: Spacing.two },
-  form: { gap: Spacing.three },
-  field: { gap: Spacing.one },
+  form:   { gap: Spacing.three },
+  field:  { gap: Spacing.one },
   errorBox: { padding: Spacing.three, borderRadius: Spacing.two },
-  errorText: { color: '#EF4444' },
   input: {
     height: 52,
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
     fontSize: 16,
+    borderWidth: 1,
   },
   button: {
     height: 52,
     borderRadius: Spacing.three,
-    backgroundColor: '#208AEF',
+    backgroundColor: ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.two,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonText: { color: '#F4F1EA', fontSize: 16, fontWeight: '600' },
 });

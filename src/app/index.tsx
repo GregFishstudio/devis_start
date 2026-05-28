@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { ACCENT, BottomTabInset, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useChat } from '@/hooks/use-chat';
 import { useTheme } from '@/hooks/use-theme';
@@ -37,11 +37,9 @@ export default function ChatScreen() {
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === 'user';
     return (
-      <View style={[styles.bubble, isUser ? styles.userBubble : styles.aiBubble]}>
+      <View style={[styles.bubble, isUser ? styles.userBubble : [styles.aiBubble, { backgroundColor: theme.backgroundElement }]]}>
         {!isUser && (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.roleLabel}>
-            IA
-          </ThemedText>
+          <ThemedText type="small" style={styles.roleLabel}>IA</ThemedText>
         )}
         <ThemedText style={isUser ? styles.userText : undefined}>{item.content}</ThemedText>
       </View>
@@ -50,15 +48,15 @@ export default function ChatScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.headerRow}>
+      <SafeAreaView style={styles.headerWrap} edges={['top']}>
+        <View style={styles.header}>
           <View>
-            <ThemedText type="smallBold">Assistant IA</ThemedText>
+            <ThemedText type="smallBold" style={styles.headerTitle}>Assistant IA</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               {profile?.full_name ?? 'Mon entreprise'}
             </ThemedText>
           </View>
-          <Pressable onPress={signOut}>
+          <Pressable onPress={signOut} style={styles.signOutBtn}>
             <ThemedText type="small" themeColor="textSecondary">Déconnexion</ThemedText>
           </Pressable>
         </View>
@@ -76,9 +74,10 @@ export default function ChatScreen() {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <ThemedText type="subtitle" style={styles.emptyTitle}>Bonjour 👋</ThemedText>
+              <ThemedText style={styles.emptyIcon}>✦</ThemedText>
+              <ThemedText type="subtitle" style={styles.emptyTitle}>Bonjour</ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-                Décrivez un devis, une note, ou une action Instagram.
+                Décrivez un devis, une note,{'\n'}ou une action Instagram.
               </ThemedText>
             </View>
           }
@@ -100,7 +99,7 @@ export default function ChatScreen() {
             onPress={handleSend}
             disabled={!input.trim() || isSending}>
             {isSending
-              ? <ActivityIndicator color="#fff" size="small" />
+              ? <ActivityIndicator color="#0D2A45" size="small" />
               : <ThemedText style={styles.sendBtnText}>↑</ThemedText>}
           </Pressable>
         </ThemedView>
@@ -112,19 +111,20 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
-  header: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(128,128,128,0.2)' },
-  headerRow: {
+  headerWrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1A3D5D',
+  },
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
   },
-  messageList: {
-    padding: Spacing.three,
-    gap: Spacing.two,
-    paddingBottom: Spacing.five,
-  },
+  headerTitle: { color: ACCENT },
+  signOutBtn: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.two },
+  messageList: { padding: Spacing.three, gap: Spacing.two, paddingBottom: Spacing.five },
   bubble: {
     maxWidth: '80%',
     padding: Spacing.three,
@@ -133,19 +133,17 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#208AEF',
+    backgroundColor: ACCENT,
     borderBottomRightRadius: Spacing.one,
   },
   aiBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(128,128,128,0.3)',
     borderBottomLeftRadius: Spacing.one,
   },
-  userText: { color: '#fff' },
-  roleLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.five, gap: Spacing.three },
+  userText: { color: '#F4F1EA' },
+  roleLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, color: ACCENT },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.five, gap: Spacing.three, marginTop: Spacing.six },
+  emptyIcon: { fontSize: 32, color: ACCENT },
   emptyTitle: { textAlign: 'center', fontSize: 28 },
   emptyText: { textAlign: 'center', lineHeight: 24 },
   inputBar: {
@@ -154,6 +152,8 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
     gap: Spacing.two,
     paddingBottom: BottomTabInset + Spacing.two,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#234d73',
   },
   input: {
     flex: 1,
@@ -168,9 +168,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#208AEF',
+    backgroundColor: ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendBtnText: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  sendBtnText: { color: '#0D2A45', fontSize: 18, fontWeight: '700' },
 });

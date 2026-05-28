@@ -1,10 +1,10 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useColorScheme } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { ACCENT, Colors } from '@/constants/theme';
 
-// Replace these placeholder icons with proper assets for each tab
-const homeIcon = require('@/assets/images/tabIcons/home.png');
+// Replace these with proper tab icon assets
+const homeIcon    = require('@/assets/images/tabIcons/home.png');
 const exploreIcon = require('@/assets/images/tabIcons/explore.png');
 
 export default function AppTabs() {
@@ -14,8 +14,11 @@ export default function AppTabs() {
   return (
     <NativeTabs
       backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      indicatorColor={ACCENT}
+      labelStyle={{
+        selected: { color: ACCENT },
+        default:  { color: colors.textSecondary },
+      }}>
 
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Chat</NativeTabs.Trigger.Label>

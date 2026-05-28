@@ -16,9 +16,10 @@ function Navigator() {
   useEffect(() => {
     if (loading) return;
     const inAuth = segments[0] === '(auth)';
+    const inCompanySetup = segments[1] === 'company-setup';
     if (!session && !inAuth) {
       router.replace('/(auth)/login');
-    } else if (session && !profile?.company_id && !inAuth) {
+    } else if (session && !profile?.company_id && !inCompanySetup) {
       router.replace('/(auth)/company-setup');
     } else if (session && profile?.company_id && inAuth) {
       router.replace('/');

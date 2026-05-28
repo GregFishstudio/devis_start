@@ -10,7 +10,7 @@ import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { ACCENT, Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
   return (
@@ -41,8 +41,11 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
         type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
+        style={[styles.tabBtn, isFocused && styles.tabBtnFocused]}>
+        <ThemedText
+          type="small"
+          style={isFocused ? styles.tabLabelFocused : undefined}
+          themeColor={isFocused ? 'text' : 'textSecondary'}>
           {children}
         </ThemedText>
       </ThemedView>
@@ -83,11 +86,13 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     maxWidth: MaxContentWidth,
   },
-  brandText: { marginRight: 'auto' },
+  brandText: { marginRight: 'auto', color: ACCENT },
   pressed: { opacity: 0.7 },
-  tabButtonView: {
+  tabBtn: {
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,
   },
+  tabBtnFocused: { backgroundColor: ACCENT + '22' },
+  tabLabelFocused: { color: ACCENT, fontWeight: '600' },
 });

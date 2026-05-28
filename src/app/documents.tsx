@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { ACCENT, BottomTabInset, ERROR, SUCCESS, WARNING, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useClients } from '@/hooks/use-clients';
 import { useQuotes } from '@/hooks/use-quotes';
@@ -21,58 +21,57 @@ import { useTheme } from '@/hooks/use-theme';
 import type { Quote, QuoteStatus } from '@/types/database';
 
 const STATUS_LABELS: Record<QuoteStatus, string> = {
-  draft: 'Brouillon',
-  sent: 'Envoyé',
+  draft:    'Brouillon',
+  sent:     'Envoyé',
   accepted: 'Accepté',
   rejected: 'Refusé',
-  expired: 'Expiré',
+  expired:  'Expiré',
 };
 
+// Colors optimized for dark navy background
 const STATUS_COLORS: Record<QuoteStatus, string> = {
-  draft: '#6B7280',
-  sent: '#208AEF',
-  accepted: '#22C55E',
-  rejected: '#EF4444',
-  expired: '#F59E0B',
+  draft:    '#94A3B8',
+  sent:     '#60A5FA',
+  accepted: SUCCESS,
+  rejected: ERROR,
+  expired:  WARNING,
 };
 
 function StatusBadge({ status }: { status: QuoteStatus }) {
+  const color = STATUS_COLORS[status];
   return (
-    <View style={[styles.badge, { backgroundColor: STATUS_COLORS[status] + '22' }]}>
-      <ThemedText type="small" style={[styles.badgeText, { color: STATUS_COLORS[status] }]}>
+    <View style={[styles.badge, { backgroundColor: color + '22', borderColor: color + '55', borderWidth: 1 }]}>
+      <ThemedText type="small" style={[styles.badgeText, { color }]}>
         {STATUS_LABELS[status]}
       </ThemedText>
     </View>
   );
 }
 
-function QuoteCard({ quote, onPress }: { quote: Quote; onPress: () => void }) {
+function QuoteCard({ quote }: { quote: Quote }) {
   return (
-    <Pressable onPress={onPress}>
-      <ThemedView type="backgroundElement" style={styles.card}>
-        <View style={styles.cardTop}>
-          <ThemedText type="smallBold">{quote.number}</ThemedText>
-          <StatusBadge status={quote.status} />
-        </View>
-        <ThemedText themeColor="textSecondary" style={styles.cardClient}>
-          {quote.clients?.name ?? 'Client non assigné'}
+    <ThemedView type="backgroundElement" style={styles.card}>
+      <View style={styles.cardTop}>
+        <ThemedText type="smallBold" style={styles.quoteNumber}>{quote.number}</ThemedText>
+        <StatusBadge status={quote.status} />
+      </View>
+      <ThemedText themeColor="textSecondary" style={styles.cardClient}>
+        {quote.clients?.name ?? 'Client non assigné'}
+      </ThemedText>
+      <View style={styles.cardBottom}>
+        <ThemedText type="small" themeColor="textSecondary">
+          {new Date(quote.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
         </ThemedText>
-        <View style={styles.cardBottom}>
-          <ThemedText type="small" themeColor="textSecondary">
-            {new Date(quote.created_at).toLocaleDateString('fr-FR')}
-          </ThemedText>
-          <ThemedText type="smallBold">
-            {quote.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-          </ThemedText>
-        </View>
-      </ThemedView>
-    </Pressable>
+        <ThemedText type="smallBold" style={styles.total}>
+          {quote.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+        </ThemedText>
+      </View>
+    </ThemedView>
   );
 }
 
 export default function DocumentsScreen() {
   const theme = useTheme();
-  const { profile } = useAuth();
   const { quotes, isLoading, createQuote } = useQuotes();
   const { clients } = useClients();
   const [modalVisible, setModalVisible] = useState(false);
@@ -85,18 +84,13 @@ export default function DocumentsScreen() {
     setCreating(true);
     try {
       await createQuote.mutateAsync({
-        number: nextNumber,
-        status: 'draft',
-        title: form.title.trim() || null,
-        client_id: form.client_id || null,
-        description: null,
-        notes: null,
-        subtotal: 0,
-        tax_rate: 20,
-        tax_amount: 0,
-        total: 0,
-        pdf_url: null,
-        valid_until: null,
+        number:      nextNumber,
+        status:      'draft',
+        title:       form.title.trim() || null,
+        client_id:   form.client_id || null,
+        description: null, notes: null,
+        subtotal: 0, tax_rate: 20, tax_amount: 0, total: 0,
+        pdf_url: null, valid_until: null,
       });
       setForm({ title: '', client_id: '' });
       setModalVisible(false);
@@ -117,19 +111,18 @@ export default function DocumentsScreen() {
       </SafeAreaView>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-        </View>
+        <View style={styles.center}><ActivityIndicator color={ACCENT} /></View>
       ) : (
         <FlatList
           data={quotes}
           keyExtractor={(q) => q.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => <QuoteCard quote={item} onPress={() => {}} />}
+          renderItem={({ item }) => <QuoteCard quote={item} />}
           ListEmptyComponent={
             <View style={styles.empty}>
+              <ThemedText style={styles.emptyIcon}>📄</ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-                Aucun devis pour l'instant.{'\n'}Créez-en un ou demandez à l'IA dans le Chat.
+                Aucun devis pour l'instant.{'\n'}Créez-en un ou demandez à l'IA.
               </ThemedText>
             </View>
           }
@@ -139,7 +132,7 @@ export default function DocumentsScreen() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <ThemedView style={styles.modal}>
           <SafeAreaView style={styles.modalSafe}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.backgroundSelected }]}>
               <ThemedText type="smallBold">Nouveau devis</ThemedText>
               <Pressable onPress={() => setModalVisible(false)}>
                 <ThemedText themeColor="textSecondary">Annuler</ThemedText>
@@ -150,14 +143,14 @@ export default function DocumentsScreen() {
               <View style={styles.field}>
                 <ThemedText type="small" themeColor="textSecondary">Numéro</ThemedText>
                 <ThemedView type="backgroundElement" style={styles.readonlyInput}>
-                  <ThemedText>{nextNumber}</ThemedText>
+                  <ThemedText style={styles.readonlyText}>{nextNumber}</ThemedText>
                 </ThemedView>
               </View>
 
               <View style={styles.field}>
                 <ThemedText type="small" themeColor="textSecondary">Titre (optionnel)</ThemedText>
                 <TextInput
-                  style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+                  style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected }]}
                   value={form.title}
                   onChangeText={(v) => setForm(f => ({ ...f, title: v }))}
                   placeholder="Ex: Prestation web – Mai 2026"
@@ -167,20 +160,26 @@ export default function DocumentsScreen() {
 
               <View style={styles.field}>
                 <ThemedText type="small" themeColor="textSecondary">Client</ThemedText>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.clientPicker}>
-                  <Pressable
-                    style={[styles.clientChip, !form.client_id && styles.clientChipSelected]}
-                    onPress={() => setForm(f => ({ ...f, client_id: '' }))}>
-                    <ThemedText type="small">Aucun</ThemedText>
-                  </Pressable>
-                  {clients.map((c) => (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.chipRow}>
                     <Pressable
-                      key={c.id}
-                      style={[styles.clientChip, form.client_id === c.id && styles.clientChipSelected]}
-                      onPress={() => setForm(f => ({ ...f, client_id: c.id }))}>
-                      <ThemedText type="small">{c.name}</ThemedText>
+                      style={[styles.chip, !form.client_id && styles.chipSelected]}
+                      onPress={() => setForm(f => ({ ...f, client_id: '' }))}>
+                      <ThemedText type="small" style={!form.client_id ? styles.chipTextSelected : undefined}>
+                        Aucun
+                      </ThemedText>
                     </Pressable>
-                  ))}
+                    {clients.map((c) => (
+                      <Pressable
+                        key={c.id}
+                        style={[styles.chip, form.client_id === c.id && styles.chipSelected]}
+                        onPress={() => setForm(f => ({ ...f, client_id: c.id }))}>
+                        <ThemedText type="small" style={form.client_id === c.id ? styles.chipTextSelected : undefined}>
+                          {c.name}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
                 </ScrollView>
               </View>
             </ScrollView>
@@ -191,7 +190,7 @@ export default function DocumentsScreen() {
                 onPress={handleCreate}
                 disabled={creating}>
                 {creating
-                  ? <ActivityIndicator color="#fff" />
+                  ? <ActivityIndicator color="#0D2A45" />
                   : <ThemedText style={styles.createBtnText}>Créer le devis</ThemedText>}
               </Pressable>
             </View>
@@ -211,22 +210,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
-  addBtn: {
-    backgroundColor: '#208AEF',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
-  },
-  addBtnText: { color: '#fff', fontWeight: '600' },
+  addBtn: { backgroundColor: ACCENT, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: Spacing.two },
+  addBtnText: { color: '#F4F1EA', fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: Spacing.three, gap: Spacing.two, paddingBottom: BottomTabInset + Spacing.three },
   card: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.two },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  quoteNumber: { color: ACCENT },
   cardClient: { fontSize: 14 },
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  total: { color: ACCENT },
   badge: { paddingHorizontal: Spacing.two, paddingVertical: 2, borderRadius: Spacing.two },
   badgeText: { fontSize: 11, fontWeight: '600' },
-  empty: { paddingTop: Spacing.six, alignItems: 'center' },
+  empty: { paddingTop: Spacing.six, alignItems: 'center', gap: Spacing.three },
+  emptyIcon: { fontSize: 40 },
   emptyText: { textAlign: 'center', lineHeight: 24 },
   modal: { flex: 1 },
   modalSafe: { flex: 1 },
@@ -236,29 +233,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.four,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128,128,128,0.2)',
   },
   modalBody: { flex: 1, padding: Spacing.four },
   modalFooter: { padding: Spacing.four },
   field: { gap: Spacing.one, marginBottom: Spacing.three },
-  input: { height: 52, borderRadius: Spacing.three, paddingHorizontal: Spacing.three, fontSize: 16 },
+  input: { height: 52, borderRadius: Spacing.three, paddingHorizontal: Spacing.three, fontSize: 16, borderWidth: 1 },
   readonlyInput: { height: 52, borderRadius: Spacing.three, paddingHorizontal: Spacing.three, justifyContent: 'center' },
-  clientPicker: { flexDirection: 'row' },
-  clientChip: {
+  readonlyText: { color: ACCENT, fontWeight: '600' },
+  chipRow: { flexDirection: 'row', gap: Spacing.two },
+  chip: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
     borderRadius: Spacing.three,
     borderWidth: 1,
-    borderColor: 'rgba(128,128,128,0.3)',
-    marginRight: Spacing.two,
+    borderColor: '#234d73',
   },
-  clientChipSelected: { backgroundColor: '#208AEF', borderColor: '#208AEF' },
-  createBtn: {
-    height: 52,
-    borderRadius: Spacing.three,
-    backgroundColor: '#208AEF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  chipSelected: { backgroundColor: ACCENT, borderColor: ACCENT },
+  chipTextSelected: { color: '#0D2A45', fontWeight: '600' },
+  createBtn: { height: 52, borderRadius: Spacing.three, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
+  createBtnText: { color: '#F4F1EA', fontSize: 16, fontWeight: '600' },
 });

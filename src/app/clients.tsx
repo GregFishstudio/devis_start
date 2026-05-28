@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { ACCENT, BottomTabInset, Spacing } from '@/constants/theme';
 import { useClients } from '@/hooks/use-clients';
 import { useTheme } from '@/hooks/use-theme';
 import type { Client, NewClient } from '@/types/database';
@@ -34,6 +34,7 @@ function ClientCard({ client, onDelete }: { client: Client; onDelete: () => void
           {!!client.phone && <ThemedText type="small" themeColor="textSecondary">{client.phone}</ThemedText>}
         </View>
         <Pressable
+          hitSlop={12}
           onPress={() => Alert.alert('Supprimer', `Supprimer ${client.name} ?`, [
             { text: 'Annuler', style: 'cancel' },
             { text: 'Supprimer', style: 'destructive', onPress: onDelete },
@@ -84,7 +85,7 @@ export default function ClientsScreen() {
         </View>
         <View style={styles.searchBar}>
           <TextInput
-            style={[styles.searchInput, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.searchInput, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected }]}
             value={search}
             onChangeText={setSearch}
             placeholder="Rechercher..."
@@ -95,20 +96,18 @@ export default function ClientsScreen() {
       </SafeAreaView>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator /></View>
+        <View style={styles.center}><ActivityIndicator color={ACCENT} /></View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(c) => c.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <ClientCard
-              client={item}
-              onDelete={() => deleteClient.mutate(item.id)}
-            />
+            <ClientCard client={item} onDelete={() => deleteClient.mutate(item.id)} />
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
+              <ThemedText style={styles.emptyIcon}>👤</ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.emptyText}>
                 {search ? 'Aucun résultat.' : 'Aucun client pour l\'instant.\nAjoutez votre premier client.'}
               </ThemedText>
@@ -120,7 +119,7 @@ export default function ClientsScreen() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <ThemedView style={styles.modal}>
           <SafeAreaView style={styles.modalSafe}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.backgroundSelected }]}>
               <ThemedText type="smallBold">Nouveau client</ThemedText>
               <Pressable onPress={() => setModalVisible(false)}>
                 <ThemedText themeColor="textSecondary">Annuler</ThemedText>
@@ -129,17 +128,21 @@ export default function ClientsScreen() {
 
             <ScrollView style={styles.modalBody}>
               {([
-                { key: 'name', label: 'Nom *', cap: 'words' as const },
-                { key: 'email', label: 'Email', kb: 'email-address' as const, cap: 'none' as const },
-                { key: 'phone', label: 'Téléphone', kb: 'phone-pad' as const, cap: 'none' as const },
-                { key: 'address', label: 'Adresse', cap: 'sentences' as const },
-                { key: 'siret', label: 'SIRET', kb: 'numeric' as const, cap: 'none' as const },
-                { key: 'notes', label: 'Notes', cap: 'sentences' as const },
+                { key: 'name',    label: 'Nom *',      cap: 'words'        as const },
+                { key: 'email',   label: 'Email',       kb: 'email-address' as const, cap: 'none' as const },
+                { key: 'phone',   label: 'Téléphone',   kb: 'phone-pad'    as const, cap: 'none' as const },
+                { key: 'address', label: 'Adresse',     cap: 'sentences'    as const },
+                { key: 'siret',   label: 'SIRET',       kb: 'numeric'       as const, cap: 'none' as const },
+                { key: 'notes',   label: 'Notes',       cap: 'sentences'    as const },
               ] as const).map(({ key, label, cap, kb }) => (
                 <View key={key} style={styles.field}>
                   <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+                    style={[
+                      styles.input,
+                      key === 'notes' && styles.inputMultiline,
+                      { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected },
+                    ]}
                     value={form[key as keyof NewClient] ?? ''}
                     onChangeText={update(key as keyof NewClient)}
                     placeholder={label.replace(' *', '')}
@@ -149,6 +152,7 @@ export default function ClientsScreen() {
                     autoCorrect={false}
                     multiline={key === 'notes'}
                     numberOfLines={key === 'notes' ? 3 : 1}
+                    textAlignVertical={key === 'notes' ? 'top' : undefined}
                   />
                 </View>
               ))}
@@ -160,7 +164,7 @@ export default function ClientsScreen() {
                 onPress={handleCreate}
                 disabled={saving || !form.name?.trim()}>
                 {saving
-                  ? <ActivityIndicator color="#fff" />
+                  ? <ActivityIndicator color="#0D2A45" />
                   : <ThemedText style={styles.saveBtnText}>Enregistrer</ThemedText>}
               </Pressable>
             </View>
@@ -180,34 +184,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
-  addBtn: { backgroundColor: '#208AEF', paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: Spacing.two },
-  addBtnText: { color: '#fff', fontWeight: '600' },
+  addBtn: { backgroundColor: ACCENT, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: Spacing.two },
+  addBtnText: { color: '#F4F1EA', fontWeight: '600' },
   searchBar: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
-  searchInput: { height: 40, borderRadius: Spacing.two, paddingHorizontal: Spacing.three, fontSize: 15 },
+  searchInput: { height: 40, borderRadius: Spacing.two, paddingHorizontal: Spacing.three, fontSize: 15, borderWidth: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: Spacing.three, gap: Spacing.two, paddingBottom: BottomTabInset + Spacing.three },
   card: { padding: Spacing.three, borderRadius: Spacing.three },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   avatar: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#208AEF22', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: ACCENT + '33',
+    alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { color: '#208AEF', fontWeight: '700', fontSize: 18 },
+  avatarText: { color: ACCENT, fontWeight: '700', fontSize: 18 },
   cardInfo: { flex: 1, gap: 2 },
   deleteIcon: { fontSize: 22, paddingHorizontal: Spacing.one },
-  empty: { paddingTop: Spacing.six, alignItems: 'center' },
+  empty: { paddingTop: Spacing.six, alignItems: 'center', gap: Spacing.three },
+  emptyIcon: { fontSize: 40 },
   emptyText: { textAlign: 'center', lineHeight: 24 },
   modal: { flex: 1 },
   modalSafe: { flex: 1 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: Spacing.four,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(128,128,128,0.2)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   modalBody: { flex: 1, padding: Spacing.four },
   modalFooter: { padding: Spacing.four },
   field: { gap: Spacing.one, marginBottom: Spacing.three },
-  input: { height: 52, borderRadius: Spacing.three, paddingHorizontal: Spacing.three, fontSize: 16 },
-  saveBtn: { height: 52, borderRadius: Spacing.three, backgroundColor: '#208AEF', alignItems: 'center', justifyContent: 'center' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  input: { height: 52, borderRadius: Spacing.three, paddingHorizontal: Spacing.three, fontSize: 16, borderWidth: 1 },
+  inputMultiline: { height: 80, paddingTop: Spacing.two },
+  saveBtn: { height: 52, borderRadius: Spacing.three, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
+  saveBtnText: { color: '#F4F1EA', fontSize: 16, fontWeight: '600' },
 });

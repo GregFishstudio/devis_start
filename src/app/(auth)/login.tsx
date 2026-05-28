@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { ACCENT, ERROR, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function LoginScreen() {
@@ -42,12 +42,12 @@ export default function LoginScreen() {
         <View style={styles.form}>
           {!!error && (
             <ThemedView type="backgroundElement" style={styles.errorBox}>
-              <ThemedText type="small" style={styles.errorText}>{error}</ThemedText>
+              <ThemedText type="small" style={{ color: ERROR }}>{error}</ThemedText>
             </ThemedView>
           )}
 
           <TextInput
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected }]}
             value={email}
             onChangeText={setEmail}
             placeholder="Email"
@@ -58,7 +58,7 @@ export default function LoginScreen() {
             returnKeyType="next"
           />
           <TextInput
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text, borderColor: theme.backgroundSelected }]}
             value={password}
             onChangeText={setPassword}
             placeholder="Mot de passe"
@@ -73,7 +73,7 @@ export default function LoginScreen() {
             onPress={handleLogin}
             disabled={loading}>
             {loading
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color="#0D2A45" />
               : <ThemedText style={styles.buttonText}>Se connecter</ThemedText>}
           </Pressable>
 
@@ -91,23 +91,23 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four, justifyContent: 'center', gap: Spacing.five },
   header: { gap: Spacing.two },
-  brand: { fontSize: 36, lineHeight: 42 },
+  brand: { fontSize: 36, lineHeight: 42, color: ACCENT },
   form: { gap: Spacing.three },
   errorBox: { padding: Spacing.three, borderRadius: Spacing.two },
-  errorText: { color: '#EF4444' },
   input: {
     height: 52,
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
     fontSize: 16,
+    borderWidth: 1,
   },
   button: {
     height: 52,
     borderRadius: Spacing.three,
-    backgroundColor: '#208AEF',
+    backgroundColor: ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonText: { color: '#F4F1EA', fontSize: 16, fontWeight: '600' },
   link: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
 });
