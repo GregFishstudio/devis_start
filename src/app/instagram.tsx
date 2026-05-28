@@ -36,6 +36,24 @@ const STATUS_COLORS: Record<InstagramPostStatus, string> = {
 
 const INSTAGRAM_PINK = '#E1306C';
 
+async function uploadMediaToStorage(uri: string, companyId: string): Promise<string> {
+  const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const contentType = ext === 'mp4' || ext === 'mov' ? 'video/mp4' : 'image/jpeg';
+  const fileName = `${companyId}/media-${Date.now()}.${ext}`;
+
+  const response = await fetch(uri);
+  const blob = await response.blob();
+
+  const { error } = await supabase.storage
+    .from('instagram-media')
+    .upload(fileName, blob, { contentType, upsert: false });
+
+  if (error) throw error;
+
+  const { data } = supabase.storage.from('instagram-media').getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
 function useInstagramPosts() {
   const { profile } = useAuth();
   const qc = useQueryClient();
@@ -67,11 +85,22 @@ function useInstagramPosts() {
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
   });
 
-  return { posts, isLoading, createPost };
+  const publishPost = useMutation({
+    mutationFn: async (post_id: string) => {
+      const { error } = await supabase.functions.invoke('instagram-publish', {
+        body: { post_id },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
+
+  return { posts, isLoading, createPost, publishPost };
 }
 
-function PostCard({ post }: { post: InstagramPost }) {
+function PostCard({ post, onPublish }: { post: InstagramPost; onPublish: (id: string) => void }) {
   const color = STATUS_COLORS[post.status];
+  const canPublish = post.status === 'pending' && !!post.media_url;
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
       <View style={styles.cardRow}>
@@ -87,12 +116,25 @@ function PostCard({ post }: { post: InstagramPost }) {
             <View style={[styles.statusDot, { backgroundColor: color }]} />
             <ThemedText type="small" style={{ color }}>{STATUS_LABELS[post.status]}</ThemedText>
           </View>
-          {!!post.context && (
+          {!!post.caption && (
+            <ThemedText type="small" numberOfLines={2}>{post.caption}</ThemedText>
+          )}
+          {!!post.context && !post.caption && (
             <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>{post.context}</ThemedText>
           )}
-          <ThemedText type="small" themeColor="textSecondary">
-            {new Date(post.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-          </ThemedText>
+          {!!post.error_message && (
+            <ThemedText type="small" style={{ color: ERROR }} numberOfLines={2}>{post.error_message}</ThemedText>
+          )}
+          <View style={styles.cardFooter}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {new Date(post.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </ThemedText>
+            {canPublish && (
+              <Pressable onPress={() => onPublish(post.id)} style={styles.publishBtn}>
+                <ThemedText type="small" style={styles.publishBtnText}>Publier ↑</ThemedText>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
     </ThemedView>
@@ -101,10 +143,13 @@ function PostCard({ post }: { post: InstagramPost }) {
 
 export default function InstagramScreen() {
   const theme = useTheme();
-  const { posts, isLoading, createPost } = useInstagramPosts();
-  const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const { profile } = useAuth();
+  const { posts, isLoading, createPost, publishPost } = useInstagramPosts();
+  const [localUri, setLocalUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [context, setContext] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const pickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -115,28 +160,42 @@ export default function InstagramScreen() {
       quality: 0.9,
     });
     if (!result.canceled && result.assets[0]) {
-      setMediaUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setLocalUri(asset.uri);
+      setMediaType(asset.type === 'video' ? 'video' : 'image');
+      setUploadError(null);
     }
   };
 
   const handleSubmit = async () => {
-    if (!context.trim() && !mediaUri) return;
+    if (!context.trim() && !localUri) return;
+    if (!profile?.company_id) return;
     setSubmitting(true);
+    setUploadError(null);
+
     try {
+      let publicUrl: string | null = null;
+      if (localUri) {
+        publicUrl = await uploadMediaToStorage(localUri, profile.company_id);
+      }
+
       await createPost.mutateAsync({
-        media_url:  mediaUri,
-        media_type: 'image',
+        media_url:  publicUrl,
+        media_type: mediaType,
         context:    context.trim() || null,
         caption:    null,
       });
-      setMediaUri(null);
+
+      setLocalUri(null);
       setContext('');
+    } catch (e) {
+      setUploadError(String(e));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const canSubmit = !submitting && (!!context.trim() || !!mediaUri);
+  const canSubmit = !submitting && (!!context.trim() || !!localUri);
 
   return (
     <ThemedView style={styles.container}>
@@ -150,8 +209,8 @@ export default function InstagramScreen() {
 
         <ThemedView type="backgroundElement" style={styles.composer}>
           <Pressable onPress={pickMedia} style={styles.mediaPicker}>
-            {mediaUri ? (
-              <Image source={{ uri: mediaUri }} style={styles.mediaPreview} />
+            {localUri ? (
+              <Image source={{ uri: localUri }} style={styles.mediaPreview} />
             ) : (
               <View style={styles.mediaPlaceholder}>
                 <ThemedText style={styles.mediaIcon}>📸</ThemedText>
@@ -170,6 +229,10 @@ export default function InstagramScreen() {
             numberOfLines={4}
             textAlignVertical="top"
           />
+
+          {uploadError && (
+            <ThemedText type="small" style={styles.errorText}>{uploadError}</ThemedText>
+          )}
 
           <Pressable
             style={[styles.submitBtn, { opacity: canSubmit ? 1 : 0.5 }]}
@@ -192,7 +255,12 @@ export default function InstagramScreen() {
           ListHeaderComponent={posts.length > 0
             ? <ThemedText type="small" themeColor="textSecondary" style={styles.sectionTitle}>Publications</ThemedText>
             : null}
-          renderItem={({ item }) => <PostCard post={item} />}
+          renderItem={({ item }) => (
+            <PostCard
+              post={item}
+              onPublish={(id) => publishPost.mutate(id)}
+            />
+          )}
           ListEmptyComponent={
             <View style={styles.empty}>
               <ThemedText themeColor="textSecondary" style={styles.emptyText}>
@@ -236,6 +304,7 @@ const styles = StyleSheet.create({
   mediaPreview: { width: '100%', height: 160, borderRadius: Spacing.two },
   mediaIcon: { fontSize: 28 },
   contextInput: { fontSize: 15, lineHeight: 22, minHeight: 80, paddingTop: 0 },
+  errorText: { color: ERROR },
   submitBtn: {
     height: 44,
     borderRadius: Spacing.two,
@@ -255,6 +324,9 @@ const styles = StyleSheet.create({
   cardContent: { flex: 1, gap: Spacing.one },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  publishBtn: { backgroundColor: INSTAGRAM_PINK, paddingHorizontal: Spacing.two, paddingVertical: 3, borderRadius: Spacing.one },
+  publishBtnText: { color: '#fff', fontWeight: '600' },
   empty: { paddingTop: Spacing.four, alignItems: 'center' },
   emptyText: { textAlign: 'center', lineHeight: 24 },
 });

@@ -24,10 +24,11 @@ export function useChat() {
     enabled: !!profile?.company_id,
   });
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, audioUrl?: string | null) => {
     if (!profile?.company_id) return;
     setIsSending(true);
 
+    // Optimistic insert
     const tempId = `temp-${Date.now()}`;
     const userMsg: ChatMessage = {
       id: tempId,
@@ -37,32 +38,47 @@ export function useChat() {
       content,
       intent: null,
       metadata: {},
-      audio_url: null,
+      audio_url: audioUrl ?? null,
       created_at: new Date().toISOString(),
     };
-
     qc.setQueryData(['chat', profile.company_id], (old: ChatMessage[] = []) => [...old, userMsg]);
 
     try {
+      // Persist user message
       await supabase.from('chat_messages').insert({
         company_id: profile.company_id,
         role: 'user',
         content,
         metadata: {},
+        audio_url: audioUrl ?? null,
+        user_id: null,
+        intent: null,
       });
 
-      // TODO: Call AI Edge Function here
-      // const { data } = await supabase.functions.invoke('ai-chat', { body: { content, company_id: profile.company_id } });
-      const aiContent = `Message reçu : "${content}". L'intégration IA (OpenClaw + Gemini) sera connectée via Edge Function.`;
-
-      await supabase.from('chat_messages').insert({
-        company_id: profile.company_id,
-        role: 'assistant',
-        content: aiContent,
-        metadata: {},
+      // Call ai-chat Edge Function
+      const { data, error } = await supabase.functions.invoke('ai-chat', {
+        body: { content, company_id: profile.company_id, audio_url: audioUrl ?? null },
       });
 
+      if (error) throw error;
+
+      // If the edge function returned the saved assistant message, inject it
+      if (data?.id) {
+        qc.setQueryData(['chat', profile.company_id], (old: ChatMessage[] = []) => {
+          const withoutTemp = old.filter((m) => m.id !== tempId);
+          // Add the real user message placeholder and the AI response
+          return [...withoutTemp, data as ChatMessage];
+        });
+      }
+
+      // Refresh from DB to get the real user message ID too
       await qc.invalidateQueries({ queryKey: ['chat', profile.company_id] });
+    } catch (err) {
+      // Remove optimistic message on failure
+      qc.setQueryData(['chat', profile.company_id], (old: ChatMessage[] = []) =>
+        old.filter((m) => m.id !== tempId),
+      );
+      throw err;
     } finally {
       setIsSending(false);
     }

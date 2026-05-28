@@ -13,18 +13,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ACCENT, BottomTabInset, Spacing } from '@/constants/theme';
+import { ACCENT, BottomTabInset, ERROR, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useChat } from '@/hooks/use-chat';
+import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
 import { useTheme } from '@/hooks/use-theme';
 import type { ChatMessage } from '@/types/database';
+
+function MessageBubble({ item }: { item: ChatMessage }) {
+  const theme = useTheme();
+  const isUser = item.role === 'user';
+  return (
+    <View style={[styles.bubble, isUser ? styles.userBubble : [styles.aiBubble, { backgroundColor: theme.backgroundElement }]]}>
+      {!isUser && (
+        <ThemedText type="small" style={styles.roleLabel}>IA</ThemedText>
+      )}
+      {item.audio_url && (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.audioLabel}>
+          🎙 Note vocale
+        </ThemedText>
+      )}
+      <ThemedText style={isUser ? styles.userText : undefined}>{item.content}</ThemedText>
+    </View>
+  );
+}
 
 export default function ChatScreen() {
   const theme = useTheme();
   const { profile, signOut } = useAuth();
   const { messages, sendMessage, isSending } = useChat();
+  const recorder = useVoiceRecorder(profile?.company_id);
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList>(null);
+
+  const isRecording = recorder.state === 'recording';
+  const isUploading = recorder.state === 'uploading';
+  const micBusy = isRecording || isUploading;
 
   const handleSend = async () => {
     const text = input.trim();
@@ -34,16 +58,16 @@ export default function ChatScreen() {
     listRef.current?.scrollToEnd({ animated: true });
   };
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const isUser = item.role === 'user';
-    return (
-      <View style={[styles.bubble, isUser ? styles.userBubble : [styles.aiBubble, { backgroundColor: theme.backgroundElement }]]}>
-        {!isUser && (
-          <ThemedText type="small" style={styles.roleLabel}>IA</ThemedText>
-        )}
-        <ThemedText style={isUser ? styles.userText : undefined}>{item.content}</ThemedText>
-      </View>
-    );
+  const handleMicPress = async () => {
+    if (isRecording) {
+      const audioUrl = await recorder.stop();
+      if (audioUrl) {
+        await sendMessage('🎙 Note vocale', audioUrl);
+        listRef.current?.scrollToEnd({ animated: true });
+      }
+    } else {
+      await recorder.start();
+    }
   };
 
   return (
@@ -81,23 +105,50 @@ export default function ChatScreen() {
               </ThemedText>
             </View>
           }
-          renderItem={renderMessage}
+          renderItem={({ item }) => <MessageBubble item={item} />}
         />
 
+        {recorder.error && (
+          <View style={styles.errorBanner}>
+            <ThemedText type="small" style={styles.errorText}>{recorder.error}</ThemedText>
+          </View>
+        )}
+
+        {isRecording && (
+          <View style={styles.recordingBanner}>
+            <View style={styles.recordingDot} />
+            <ThemedText type="small" style={styles.recordingText}>Enregistrement en cours… Appuyez pour arrêter</ThemedText>
+          </View>
+        )}
+
         <ThemedView type="backgroundElement" style={styles.inputBar}>
+          {/* Mic button */}
+          <Pressable
+            style={[styles.micBtn, isRecording && styles.micBtnActive]}
+            onPress={handleMicPress}
+            disabled={isSending || isUploading}>
+            {isUploading
+              ? <ActivityIndicator color={ACCENT} size="small" />
+              : <ThemedText style={[styles.micIcon, isRecording && styles.micIconActive]}>
+                  {isRecording ? '⏹' : '🎙'}
+                </ThemedText>}
+          </Pressable>
+
           <TextInput
             style={[styles.input, { color: theme.text }]}
             value={input}
             onChangeText={setInput}
-            placeholder="Écrivez un message..."
+            placeholder={micBusy ? '' : 'Écrivez un message...'}
             placeholderTextColor={theme.textSecondary}
             multiline
             maxLength={2000}
+            editable={!micBusy}
           />
+
           <Pressable
-            style={[styles.sendBtn, { opacity: !input.trim() || isSending ? 0.4 : 1 }]}
+            style={[styles.sendBtn, { opacity: !input.trim() || isSending || micBusy ? 0.4 : 1 }]}
             onPress={handleSend}
-            disabled={!input.trim() || isSending}>
+            disabled={!input.trim() || isSending || micBusy}>
             {isSending
               ? <ActivityIndicator color="#0D2A45" size="small" />
               : <ThemedText style={styles.sendBtnText}>↑</ThemedText>}
@@ -142,10 +193,36 @@ const styles = StyleSheet.create({
   },
   userText: { color: '#F4F1EA' },
   roleLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8, color: ACCENT },
+  audioLabel: { fontSize: 11, opacity: 0.8 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.five, gap: Spacing.three, marginTop: Spacing.six },
   emptyIcon: { fontSize: 32, color: ACCENT },
   emptyTitle: { textAlign: 'center', fontSize: 28 },
   emptyText: { textAlign: 'center', lineHeight: 24 },
+  errorBanner: {
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.one,
+    backgroundColor: '#4A1010',
+    borderRadius: Spacing.two,
+    padding: Spacing.two,
+  },
+  errorText: { color: ERROR },
+  recordingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.one,
+    backgroundColor: '#1A0D0D',
+    borderRadius: Spacing.two,
+    padding: Spacing.two,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ERROR,
+  },
+  recordingText: { color: ERROR, flex: 1 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -155,6 +232,22 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#234d73',
   },
+  micBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#234d73',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micBtnActive: {
+    borderColor: ERROR,
+    backgroundColor: '#4A1010',
+  },
+  micIcon: { fontSize: 18 },
+  micIconActive: { color: ERROR },
   input: {
     flex: 1,
     fontSize: 16,

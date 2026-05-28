@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -18,6 +19,7 @@ import { useAuth } from '@/context/auth-context';
 import { useClients } from '@/hooks/use-clients';
 import { useQuotes } from '@/hooks/use-quotes';
 import { useTheme } from '@/hooks/use-theme';
+import { supabase } from '@/lib/supabase';
 import type { Quote, QuoteStatus } from '@/types/database';
 
 const STATUS_LABELS: Record<QuoteStatus, string> = {
@@ -28,7 +30,6 @@ const STATUS_LABELS: Record<QuoteStatus, string> = {
   expired:  'Expiré',
 };
 
-// Colors optimized for dark navy background
 const STATUS_COLORS: Record<QuoteStatus, string> = {
   draft:    '#94A3B8',
   sent:     '#60A5FA',
@@ -48,7 +49,22 @@ function StatusBadge({ status }: { status: QuoteStatus }) {
   );
 }
 
-function QuoteCard({ quote }: { quote: Quote }) {
+function QuoteCard({ quote, onGeneratePdf }: { quote: Quote; onGeneratePdf: (id: string) => void }) {
+  const [generating, setGenerating] = useState(false);
+
+  const handlePdf = async () => {
+    if (quote.pdf_url) {
+      await Linking.openURL(quote.pdf_url);
+      return;
+    }
+    setGenerating(true);
+    try {
+      await onGeneratePdf(quote.id);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
       <View style={styles.cardTop}>
@@ -66,6 +82,16 @@ function QuoteCard({ quote }: { quote: Quote }) {
           {quote.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
         </ThemedText>
       </View>
+      <Pressable
+        style={[styles.pdfBtn, generating && styles.pdfBtnDisabled]}
+        onPress={handlePdf}
+        disabled={generating}>
+        {generating
+          ? <ActivityIndicator color={ACCENT} size="small" />
+          : <ThemedText type="small" style={styles.pdfBtnText}>
+              {quote.pdf_url ? '📄 Voir le PDF' : '⬇ Générer PDF'}
+            </ThemedText>}
+      </Pressable>
     </ThemedView>
   );
 }
@@ -77,6 +103,7 @@ export default function DocumentsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: '', client_id: '' });
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const nextNumber = `DEV-${String((quotes.length + 1)).padStart(4, '0')}`;
 
@@ -99,6 +126,20 @@ export default function DocumentsScreen() {
     }
   };
 
+  const handleGeneratePdf = async (quoteId: string) => {
+    setPdfError(null);
+    const { data, error } = await supabase.functions.invoke('generate-pdf', {
+      body: { quote_id: quoteId },
+    });
+    if (error) {
+      setPdfError('Erreur génération PDF : ' + String(error));
+      return;
+    }
+    if (data?.pdf_url) {
+      await Linking.openURL(data.pdf_url);
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView edges={['top']}>
@@ -110,6 +151,12 @@ export default function DocumentsScreen() {
         </View>
       </SafeAreaView>
 
+      {pdfError && (
+        <View style={styles.errorBanner}>
+          <ThemedText type="small" style={styles.errorText}>{pdfError}</ThemedText>
+        </View>
+      )}
+
       {isLoading ? (
         <View style={styles.center}><ActivityIndicator color={ACCENT} /></View>
       ) : (
@@ -117,7 +164,9 @@ export default function DocumentsScreen() {
           data={quotes}
           keyExtractor={(q) => q.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => <QuoteCard quote={item} />}
+          renderItem={({ item }) => (
+            <QuoteCard quote={item} onGeneratePdf={handleGeneratePdf} />
+          )}
           ListEmptyComponent={
             <View style={styles.empty}>
               <ThemedText style={styles.emptyIcon}>📄</ThemedText>
@@ -212,6 +261,8 @@ const styles = StyleSheet.create({
   },
   addBtn: { backgroundColor: ACCENT, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, borderRadius: Spacing.two },
   addBtnText: { color: '#F4F1EA', fontWeight: '600' },
+  errorBanner: { marginHorizontal: Spacing.three, marginBottom: Spacing.one, backgroundColor: '#4A1010', borderRadius: Spacing.two, padding: Spacing.two },
+  errorText: { color: ERROR },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { padding: Spacing.three, gap: Spacing.two, paddingBottom: BottomTabInset + Spacing.three },
   card: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.two },
@@ -222,6 +273,17 @@ const styles = StyleSheet.create({
   total: { color: ACCENT },
   badge: { paddingHorizontal: Spacing.two, paddingVertical: 2, borderRadius: Spacing.two },
   badgeText: { fontSize: 11, fontWeight: '600' },
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 32,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: ACCENT + '55',
+  },
+  pdfBtnDisabled: { opacity: 0.5 },
+  pdfBtnText: { color: ACCENT },
   empty: { paddingTop: Spacing.six, alignItems: 'center', gap: Spacing.three },
   emptyIcon: { fontSize: 40 },
   emptyText: { textAlign: 'center', lineHeight: 24 },
