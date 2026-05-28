@@ -34,6 +34,19 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Autoriser ai-devis à accéder à votre microphone pour les notes vocales."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Autoriser ai-devis à accéder à vos photos pour les publications Instagram.",
+          "cameraPermission": "Autoriser ai-devis à utiliser votre caméra."
+        }
       ]
     ],
     "experiments": {
