@@ -100,6 +100,16 @@ export type InstagramPost = {
   created_at: string;
 };
 
+export type CatalogItem = {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  unit_price: number;
+  unit: string;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -127,6 +137,11 @@ export type Database = {
         Row: QuoteItem;
         Insert: Omit<QuoteItem, 'id' | 'total' | 'created_at'>;
         Update: Partial<Omit<QuoteItem, 'id' | 'quote_id' | 'created_at' | 'total'>>;
+      };
+      catalog_items: {
+        Row: CatalogItem;
+        Insert: Omit<CatalogItem, 'id' | 'created_at'>;
+        Update: Partial<Omit<CatalogItem, 'id' | 'company_id' | 'created_at'>>;
       };
       chat_messages: {
         Row: ChatMessage;

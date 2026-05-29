@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -75,7 +76,7 @@ export default function ChatScreen() {
       <SafeAreaView style={styles.headerWrap} edges={['top']}>
         <View style={styles.header}>
           <View>
-            <ThemedText type="smallBold" style={styles.headerTitle}>Assistant IA</ThemedText>
+            <Image source={require('../../assets/images/logo.png')} style={styles.headerLogo} resizeMode="contain" />
             <ThemedText type="small" themeColor="textSecondary">
               {profile?.full_name ?? 'Mon entreprise'}
             </ThemedText>
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
   },
-  headerTitle: { color: ACCENT },
+  headerLogo: { width: 120, height: 43 },
   signOutBtn: { paddingVertical: Spacing.one, paddingHorizontal: Spacing.two },
   messageList: { padding: Spacing.three, gap: Spacing.two, paddingBottom: Spacing.five },
   bubble: {

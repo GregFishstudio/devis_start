@@ -76,12 +76,22 @@ Deno.serve(async (req) => {
     // Header background
     page.drawRectangle({ x: 0, y: height - 90, width, height: 90, color: navy });
 
-    // Company name
-    text(company.name ?? '', margin, y - 8, { font: fontBold, size: 20, color: rgb(1, 1, 1) });
-    y -= 28;
-    if (company.address) text(company.address, margin, y, { size: 9, color: rgb(0.7, 0.8, 0.9) });
-    y -= 14;
-    if (company.email) text(company.email, margin, y, { size: 9, color: rgb(0.7, 0.8, 0.9) });
+    // App logo (fetched from Supabase Storage bucket "assets")
+    try {
+      const { data: logoUrlData } = supabase.storage.from('assets').getPublicUrl('logo.png');
+      const logoRes = await fetch(logoUrlData.publicUrl);
+      if (logoRes.ok) {
+        const logoBytes = await logoRes.arrayBuffer();
+        const logoImg = await doc.embedPng(new Uint8Array(logoBytes));
+        const logoW = 140;
+        const logoH = logoW * (logoImg.height / logoImg.width);
+        page.drawImage(logoImg, { x: margin, y: height - margin / 2 - logoH / 2 - 10, width: logoW, height: logoH });
+      }
+    } catch { /* logo optionnel */ }
+
+    // Company name fallback if no logo
+    if (company.address) text(company.address, margin, y - 28, { size: 9, color: rgb(0.7, 0.8, 0.9) });
+    if (company.email) text(company.email, margin, y - 42, { size: 9, color: rgb(0.7, 0.8, 0.9) });
 
     // DEVIS title right-aligned
     text('DEVIS', width - margin - 60, height - 40, { font: fontBold, size: 24, color: accent });

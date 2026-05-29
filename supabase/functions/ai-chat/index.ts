@@ -1,34 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-const SYSTEM_PROMPT = `Tu es un assistant IA pour une application de gestion de petite entreprise. Tu parles uniquement en français.
-
-Tu peux réaliser ces actions :
-- Créer un devis (intent: "quote") — extrais le client, les prestations et les montants si mentionnés
-- Préparer une publication Instagram (intent: "instagram") — génère une légende optimisée
-- Enregistrer une note (intent: "note") — résume ou reformule le contenu
-- Répondre à une question générale (intent: "chat")
-
-Réponds toujours avec un JSON structuré :
-{
-  "intent": "quote" | "instagram" | "note" | "chat",
-  "content": "ta réponse textuelle ici",
-  "data": { /* données structurées extraites, optionnel */ }
-}
-
-Pour un devis, data peut contenir : { title, client_name, items: [{ description, quantity, unit_price }] }
-Pour Instagram, data peut contenir : { caption, hashtags }
-Sinon data est null.`;
-
-type Intent = 'quote' | 'instagram' | 'note' | 'chat';
-
-interface GeminiResponse {
-  intent: Intent;
-  content: string;
-  data: Record<string, unknown> | null;
-}
+const OPENCLAW_TIMEOUT_MS = 50_000; // 50s — Edge Function max = 60s
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -53,60 +26,72 @@ Deno.serve(async (req) => {
     // Fetch last 10 messages for context
     const { data: history } = await supabase
       .from('chat_messages')
-      .select('role, content')
+      .select('role, content, intent, metadata')
       .eq('company_id', company_id)
       .order('created_at', { ascending: false })
       .limit(10);
 
-    const contextMessages = (history ?? []).reverse().map((m: { role: string; content: string }) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    }));
+    const contextMessages = (history ?? []).reverse();
 
-    const userMessage = audio_url
-      ? `[Message vocal] ${content}`
-      : content;
+    // Save user message first
+    await supabase.from('chat_messages').insert({
+      company_id,
+      role: 'user',
+      content,
+      audio_url: audio_url ?? null,
+      intent: null,
+      metadata: {},
+      user_id: null,
+    });
 
-    const geminiBody = {
-      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [
-        ...contextMessages,
-        { role: 'user', parts: [{ text: userMessage }] },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-        responseMimeType: 'application/json',
-      },
+    // --- Forward to local OpenClaw ---
+    const openclawUrl = Deno.env.get('OPENCLAW_URL');
+    const openclawSecret = Deno.env.get('OPENCLAW_SECRET');
+
+    if (!openclawUrl || !openclawSecret) {
+      throw new Error('OPENCLAW_URL ou OPENCLAW_SECRET non configuré');
+    }
+
+    const payload = {
+      content: audio_url ? `[Message vocal] ${content}` : content,
+      company_id,
+      audio_url: audio_url ?? null,
+      history: contextMessages,
     };
 
-    const geminiRes = await fetch(
-      `${GEMINI_API_URL}?key=${Deno.env.get('GEMINI_API_KEY')}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiBody),
-      },
-    );
-
-    if (!geminiRes.ok) {
-      const err = await geminiRes.text();
-      throw new Error(`Gemini error: ${err}`);
-    }
-
-    const geminiData = await geminiRes.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
-
-    let parsed: GeminiResponse;
+    let openclawRes: Response;
     try {
-      parsed = JSON.parse(rawText);
-    } catch {
-      parsed = { intent: 'chat', content: rawText, data: null };
+      openclawRes = await fetch(`${openclawUrl}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openclawSecret}`,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(OPENCLAW_TIMEOUT_MS),
+      });
+    } catch (fetchErr) {
+      const isTimeout = fetchErr instanceof DOMException && fetchErr.name === 'TimeoutError';
+      throw new Error(isTimeout
+        ? 'OpenClaw ne répond pas (timeout 50s). Vérifiez que le serveur est démarré et le tunnel actif.'
+        : `Connexion OpenClaw impossible: ${String(fetchErr)}`
+      );
     }
 
-    // Act on intent
-    if (parsed.intent === 'quote' && parsed.data) {
-      const d = parsed.data as Record<string, unknown>;
+    if (!openclawRes.ok) {
+      const errBody = await openclawRes.text().catch(() => '');
+      throw new Error(`OpenClaw a répondu ${openclawRes.status}: ${errBody}`);
+    }
+
+    const result = await openclawRes.json() as {
+      intent: 'quote' | 'instagram' | 'note' | 'chat';
+      content: string;
+      data: Record<string, unknown> | null;
+    };
+
+    // Act on intent (side-effects delegated from OpenClaw's decision)
+    if (result.intent === 'quote' && result.data) {
+      const d = result.data;
       await supabase.from('quotes').insert({
         company_id,
         number: `DEV-${Date.now().toString().slice(-6)}`,
@@ -124,8 +109,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (parsed.intent === 'instagram' && parsed.data) {
-      const d = parsed.data as Record<string, unknown>;
+    if (result.intent === 'instagram' && result.data) {
+      const d = result.data;
       await supabase.from('instagram_posts').insert({
         company_id,
         media_url: null,
@@ -142,9 +127,9 @@ Deno.serve(async (req) => {
       .insert({
         company_id,
         role: 'assistant',
-        content: parsed.content,
-        intent: parsed.intent === 'chat' ? null : parsed.intent,
-        metadata: parsed.data ?? {},
+        content: result.content,
+        intent: result.intent === 'chat' ? null : result.intent,
+        metadata: result.data ?? {},
         audio_url: null,
         user_id: null,
       })
@@ -156,8 +141,9 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify(savedMsg), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
   } catch (err) {
-    console.error('ai-chat error:', err);
+    console.error('ai-chat bridge error:', err);
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

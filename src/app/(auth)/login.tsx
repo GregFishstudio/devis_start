@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -35,7 +35,7 @@ export default function LoginScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <ThemedText type="title" style={styles.brand}>ai-devis</ThemedText>
+          <Image source={require('../../../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
           <ThemedText themeColor="textSecondary">Gérez votre entreprise avec l'IA</ThemedText>
         </View>
 
@@ -90,8 +90,8 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four, justifyContent: 'center', gap: Spacing.five },
-  header: { gap: Spacing.two },
-  brand: { fontSize: 36, lineHeight: 42, color: ACCENT },
+  header: { gap: Spacing.two, alignItems: 'flex-start' },
+  logo: { width: 200, height: 71 },
   form: { gap: Spacing.three },
   errorBox: { padding: Spacing.three, borderRadius: Spacing.two },
   input: {
